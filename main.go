@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -27,33 +28,43 @@ type outPayload struct {
 var newPayload payload
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	err := json.NewDecoder(r.Body).Decode(&newPayload)
-	if err != nil {
-		panic(err.Error())
+	enableCors(w)
+	json.NewDecoder(r.Body).Decode(&newPayload)
+	if newPayload.Cmd != "" {
+		if newPayload.Timer == 0 {
+			newPayload.Timer = 10
+		}
+		replaceCommand(newPayload.Cmd, "writer.py")
+		log.Println("Replace Command has been completed")
+		log.Println("Command is running on the board...")
+		output := runCommand("writer.py", newPayload.Timer)
+		log.Println("Command Run has been completed")
+		response := outPayload{
+			Workspace: newPayload.Workspace,
+			ComPort:   newPayload.ComPort,
+			Cmd:       newPayload.Cmd,
+			Output:    output,
+		}
+		fmt.Println(response.Output)
+		clearCommand(newPayload.Cmd, "writer.py")
+		log.Println("Command Script has been changed to default")
+		json.NewEncoder(w).Encode(response)
+	} else {
+		response := outPayload{
+			Workspace: newPayload.Workspace,
+			ComPort:   newPayload.ComPort,
+			Cmd:       newPayload.Cmd,
+			Output:    "You has been sent empty command",
+		}
+		json.NewEncoder(w).Encode(response)
 	}
-	if newPayload.Timer == 0 {
-		newPayload.Timer = 10
-	}
-	replaceCommand(newPayload.Cmd, "writer.py")
-	log.Println("Replace Command has been completed")
-	log.Println("Command is running on the board...")
-	output := runCommand("writer.py", newPayload.Timer)
-	log.Println("Command Run has been completed")
-	response := outPayload{
-		Workspace: newPayload.Workspace,
-		ComPort:   newPayload.ComPort,
-		Cmd:       newPayload.Cmd,
-		Output:    output,
-	}
-	clearCommand(newPayload.Cmd, "writer.py")
-	log.Println("Command Script has been changed to default")
-	json.NewEncoder(w).Encode(response)
+
 }
 func main() {
 	log.Println("Program has been stated")
-	log.Println("Backend is running on 6667 Port")
+	log.Println("Backend is running on 5000 Port")
 	http.HandleFunc("/exec", handler)
-	log.Fatal(http.ListenAndServe(":6667", nil))
+	log.Fatal(http.ListenAndServe(":5000", nil))
 }
 
 func replaceCommand(cmd string, filename string) {
@@ -83,7 +94,7 @@ func clearCommand(cmd string, filename string) {
 }
 
 func runCommand(filename string, timer int) (outPutBoard string) {
-	cmd := exec.Command("ampy", "-p", newPayload.ComPort, "run", filename)
+	cmd := exec.Command("ampy", "--delay=1", "-p", newPayload.ComPort, "run", filename)
 	stdout, err := cmd.StdoutPipe()
 	cmd.Stderr = cmd.Stdout
 	if err != nil {
@@ -107,4 +118,9 @@ func runCommand(filename string, timer int) (outPutBoard string) {
 		}
 	}
 	return string(newTmp)
+}
+
+func enableCors(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 }
