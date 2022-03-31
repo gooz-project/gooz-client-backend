@@ -3,10 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/tarm/serial"
 	"log"
 	"net/http"
-	"os"
-	"os/exec"
 	"strings"
 	"time"
 )
@@ -31,13 +30,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	enableCors(w)
 	json.NewDecoder(r.Body).Decode(&newPayload)
 	if newPayload.Cmd != "" {
-		if newPayload.Timer == 0 {
-			newPayload.Timer = 10
-		}
-		replaceCommand(newPayload.Cmd, "writer.py")
-		log.Println("Replace Command has been completed")
 		log.Println("Command is running on the board...")
-		output := runCommand("writer.py", newPayload.Timer)
+		output := runCommand()
 		log.Println("Command Run has been completed")
 		response := outPayload{
 			Workspace: newPayload.Workspace,
@@ -46,7 +40,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			Output:    output,
 		}
 		fmt.Println(response.Output)
-		clearCommand(newPayload.Cmd, "writer.py")
 		log.Println("Command Script has been changed to default")
 		json.NewEncoder(w).Encode(response)
 	} else {
@@ -67,57 +60,28 @@ func main() {
 	log.Fatal(http.ListenAndServe(":5000", nil))
 }
 
-func replaceCommand(cmd string, filename string) {
-	data, readerr := os.ReadFile(filename)
-	if readerr != nil {
-		panic(readerr.Error())
-	}
-	formattedData := string(data)
-	formattedData = strings.Replace(formattedData, "changewillbecmd", cmd, 1)
-	writeErr := os.WriteFile(filename, []byte(formattedData), 0644)
-	if writeErr != nil {
-		panic(writeErr.Error())
-	}
-}
-
-func clearCommand(cmd string, filename string) {
-	data, readerr := os.ReadFile(filename)
-	if readerr != nil {
-		panic(readerr.Error())
-	}
-	formattedData := string(data)
-	formattedData = strings.Replace(formattedData, cmd, "changewillbecmd", 1)
-	writeErr := os.WriteFile(filename, []byte(formattedData), 0644)
-	if writeErr != nil {
-		panic(writeErr.Error())
-	}
-}
-
-func runCommand(filename string, timer int) (outPutBoard string) {
-	cmd := exec.Command("ampy", "--delay=1", "-p", newPayload.ComPort, "run", filename)
-	stdout, err := cmd.StdoutPipe()
-	cmd.Stderr = cmd.Stdout
+func runCommand() (outPutBoard string) {
+	c := &serial.Config{Name: newPayload.ComPort, Baud: 115200}
+	s, err := serial.OpenPort(c)
 	if err != nil {
-		panic(err.Error())
+		log.Fatal(err)
 	}
-	if err = cmd.Start(); err != nil {
-		panic(err.Error())
+	data := []byte(newPayload.Cmd + "\r")
+	fmt.Println(data)
+	n, err := s.Write(data)
+	if err != nil {
+		log.Fatal(err)
 	}
-	tmp := make([]byte, 4096)
-	time.Sleep(time.Duration(timer) * time.Second)
-	for {
-		_, err := stdout.Read(tmp)
-		if err != nil {
-			break
-		}
+	time.Sleep(time.Millisecond * 300)
+	buf := make([]byte, 128)
+	n, err = s.Read(buf)
+	if err != nil {
+		log.Fatal(err)
 	}
-	var newTmp []byte
-	for _, v := range tmp {
-		if v != 0 {
-			newTmp = append(newTmp, v)
-		}
-	}
-	return string(newTmp)
+	senderData := string(buf[:n])
+	sender := strings.Split(senderData, "\n")
+	s.Close()
+	return sender[1]
 }
 
 func enableCors(w http.ResponseWriter) {
