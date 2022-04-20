@@ -3,11 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/tarm/serial"
 	"log"
 	"net/http"
+	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/tarm/serial"
 )
 
 type payload struct {
@@ -54,7 +56,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 }
 func main() {
-	log.Println("Program has been stated")
+	command := exec.Command("npm", "start")
+	command.Dir = "../gooz-client"
+	err := command.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Client has been started")
+	log.Println("Program has been started")
 	log.Println("Backend is running on 5000 Port")
 	http.HandleFunc("/exec", handler)
 	log.Fatal(http.ListenAndServe(":5000", nil))
@@ -67,12 +76,11 @@ func runCommand() (outPutBoard string) {
 		log.Fatal(err)
 	}
 	data := []byte(newPayload.Cmd + "\r")
-	fmt.Println(data)
 	n, err := s.Write(data)
 	if err != nil {
 		log.Fatal(err)
 	}
-	time.Sleep(time.Millisecond * 300)
+	time.Sleep(time.Millisecond * 3000)
 	buf := make([]byte, 128)
 	n, err = s.Read(buf)
 	if err != nil {
@@ -80,8 +88,15 @@ func runCommand() (outPutBoard string) {
 	}
 	senderData := string(buf[:n])
 	sender := strings.Split(senderData, "\n")
+	sendData := ""
+	for k, v := range sender {
+		if k != 0 && k != len(sender)-1 {
+			sendData += v
+			sendData += "\n"
+		}
+	}
 	s.Close()
-	return sender[1]
+	return sendData
 }
 
 func enableCors(w http.ResponseWriter) {
