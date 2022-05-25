@@ -55,6 +55,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 }
+
 func main() {
 	command := exec.Command("npm", "start")
 	command.Dir = "../gooz-client"
@@ -80,8 +81,8 @@ func runCommand() (outPutBoard string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	time.Sleep(time.Millisecond * 3000)
-	buf := make([]byte, 128)
+	time.Sleep(time.Millisecond * 1000)
+	buf := make([]byte, 2048)
 	n, err = s.Read(buf)
 	if err != nil {
 		log.Fatal(err)
@@ -95,6 +96,7 @@ func runCommand() (outPutBoard string) {
 			sendData += "\n"
 		}
 	}
+	println(sendData)
 	s.Close()
 	return sendData
 }
